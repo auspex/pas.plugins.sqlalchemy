@@ -206,6 +206,7 @@ class Plugin(BasePlugin, Cacheable):
                 "User does not exist: zope_id=%s" % principal_id
                 )
         user.set_password(password)
+        notify(CredentialsUpdated(user, password))
 
     security.declarePrivate('doDeleteUser')
     @graceful_recovery()
@@ -350,6 +351,7 @@ class Plugin(BasePlugin, Cacheable):
         session = Session()
         new_user = self.user_class(zope_id=user_id, login=login_name)
         new_user.set_password(password)
+        notify(CredentialsUpdated(new_user, password))
         session.add(new_user)
 
     security.declarePrivate('removeUser')

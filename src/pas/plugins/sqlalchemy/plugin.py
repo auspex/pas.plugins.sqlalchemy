@@ -20,6 +20,7 @@ from Products.PluggableAuthService.utils import createViewName
 from Products.PluggableAuthService.events import PropertiesUpdated
 from OFS.Cache import Cacheable
 from DateTime import DateTime
+from zope.component.interfaces import ComponentLookupError
 
 # Pluggable Auth Service
 from Products.PluggableAuthService.interfaces.plugins import (
@@ -32,7 +33,7 @@ from Products.PluggableAuthService.interfaces.plugins import (
     IRoleAssignerPlugin,
     IGroupEnumerationPlugin
     )
-from Products.PluggableAuthService.events import CredentialsUpdated
+from Products.PluggableAuthService.events import CredentialsUpdated, PrincipalCreated, PrincipalDeleted
 
 # PlonePAS
 from Products.PlonePAS.interfaces.plugins import IUserManagement
@@ -89,6 +90,13 @@ def graceful_recovery(default=None, log_args=True):
         def wrapper(*args, **kwargs):
             try:
                 value = func(*args, **kwargs)
+            except ComponentLookupError, e:
+                try:
+                    exc_str = str(e)
+                except:
+                    exc_str = "<%s at 0x%x>" % (e.__class__.__name__, id(e))
+                logger.critical("Apparently we haven't yet configured a z3c.saconfig connection\n%s" % exc_str)
+                return default
             except rdb.exc.SQLAlchemyError, e:
                 if log_args is False:
                     args = ()
@@ -216,6 +224,7 @@ class Plugin(BasePlugin, Cacheable):
         if user is None:
             return False
         session.delete(user)
+        notify(PrincipalDeleted(user))
         return True
 
     #
@@ -353,6 +362,7 @@ class Plugin(BasePlugin, Cacheable):
         new_user.set_password(password)
         notify(CredentialsUpdated(new_user, password))
         session.add(new_user)
+        notify(PrincipalCreated(user))
 
     security.declarePrivate('removeUser')
     @graceful_recovery()
@@ -364,6 +374,7 @@ class Plugin(BasePlugin, Cacheable):
             raise KeyError(user_id)
 
         session.delete(user)
+        notify(PrincipalDeleted(user))
 
     #
     # Allow users to change their own login name and password.
@@ -752,6 +763,7 @@ class Plugin(BasePlugin, Cacheable):
         session = Session()
         group = self.group_class(zope_id=id)
         session.add(group)
+        notify(PrincipalCreated(group))
 
         return True
 
@@ -791,6 +803,7 @@ class Plugin(BasePlugin, Cacheable):
         group = query.first()
         if group is not None:
             session.delete(group)
+            notify(PrincipalDeleted(group))
             return True
 
         return False

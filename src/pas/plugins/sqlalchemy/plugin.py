@@ -33,7 +33,7 @@ from Products.PluggableAuthService.interfaces.plugins import (
     IRoleAssignerPlugin,
     IGroupEnumerationPlugin
     )
-from Products.PluggableAuthService.events import CredentialsUpdated
+from Products.PluggableAuthService.events import CredentialsUpdated, PrincipalCreated, PrincipalDeleted
 
 # PlonePAS
 from Products.PlonePAS.interfaces.plugins import IUserManagement
@@ -224,6 +224,7 @@ class Plugin(BasePlugin, Cacheable):
         if user is None:
             return False
         session.delete(user)
+        notify(PrincipalDeleted(user))
         return True
 
     #
@@ -361,6 +362,7 @@ class Plugin(BasePlugin, Cacheable):
         new_user.set_password(password)
         notify(CredentialsUpdated(new_user, password))
         session.add(new_user)
+        notify(PrincipalCreated(user))
 
     security.declarePrivate('removeUser')
     @graceful_recovery()
@@ -372,6 +374,7 @@ class Plugin(BasePlugin, Cacheable):
             raise KeyError(user_id)
 
         session.delete(user)
+        notify(PrincipalDeleted(user))
 
     #
     # Allow users to change their own login name and password.
@@ -760,6 +763,7 @@ class Plugin(BasePlugin, Cacheable):
         session = Session()
         group = self.group_class(zope_id=id)
         session.add(group)
+        notify(PrincipalCreated(group))
 
         return True
 
@@ -799,6 +803,7 @@ class Plugin(BasePlugin, Cacheable):
         group = query.first()
         if group is not None:
             session.delete(group)
+            notify(PrincipalDeleted(group))
             return True
 
         return False
